@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="gallery-page">
+    <header class="topbar">
+        <div class="topbar-left">
+            <a class="brand" href="{{ url_for('index') }}">
+                <span class="brand-mark">MF</span>
+                <span class="brand-name">MemeForge</span>
+            </a>
+            <p class="gallery-title">Generated Gallery</p>
+        </div>
+        <div class="topbar-actions">
+            <a class="btn btn-secondary" href="{{ url_for('index') }}">Back To Editor</a>
+            <button id="themeToggle" type="button" class="btn btn-ghost">Theme</button>
+        </div>
+    </header>
+
+    <main class="gallery-main">
+        {% if generated_memes %}
+            <div class="gallery-grid">
+                {% for meme in generated_memes %}
+                    <article class="gallery-card">
+                        <img src="{{ meme.url }}" alt="Generated meme {{ loop.index }}">
+                        <div class="gallery-row">
+                            <p>{{ meme.filename }}</p>
+                            <a href="{{ meme.url }}" download class="btn btn-ghost">Download</a>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="gallery-empty">
+                No memes yet. Generate one in the editor and it will appear here.
+            </div>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}

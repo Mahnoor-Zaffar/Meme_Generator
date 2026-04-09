@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="editor-app" data-max-upload-mb="{{ max_upload_mb }}">
+    <header class="topbar">
+        <div class="topbar-left">
+            <a class="brand" href="{{ url_for('index') }}" aria-label="MemeForge Studio home">
+                <span class="brand-mark">MF</span>
+                <span class="brand-name">MemeForge</span>
+            </a>
+            <label class="project-wrap" for="projectTitle">
+                <span class="project-label">Project</span>
+                <input id="projectTitle" type="text" value="{{ project_title }}" maxlength="60" class="project-title">
+            </label>
+        </div>
+        <div class="topbar-actions">
+            <a class="topbar-link" href="{{ url_for('gallery') }}">Gallery</a>
+            <button id="themeToggle" type="button" class="btn btn-ghost">Theme</button>
+            <button id="generateBtnDesktop" type="button" class="btn btn-secondary" disabled>Generate</button>
+            <a id="exportBtnDesktop" href="#" class="btn btn-primary is-disabled" aria-disabled="true" download>Export PNG</a>
+        </div>
+    </header>
+
+    <div class="workspace-grid">
+        <nav class="left-rail" aria-label="Editor sections">
+            <button type="button" class="rail-btn is-active" data-tool="assets" aria-controls="panel-assets" title="Assets">A</button>
+            <button type="button" class="rail-btn" data-tool="templates" aria-controls="panel-templates" title="Templates">T</button>
+            <button type="button" class="rail-btn" data-tool="text" aria-controls="panel-text" title="Text">Tx</button>
+            <button type="button" class="rail-btn" data-tool="style" aria-controls="panel-style" title="Style">S</button>
+        </nav>
+
+        <section class="tool-panel" aria-labelledby="toolPanelTitle">
+            <header class="tool-header">
+                <h1 id="toolPanelTitle" class="tool-title">Assets</h1>
+                <p id="toolPanelHint" class="tool-hint">Upload an image or start from a template.</p>
+            </header>
+
+            <div id="blockingError" class="inline-error" hidden></div>
+
+            <div id="panel-assets" class="tool-view" data-tool-panel="assets">
+                <label class="field-label" for="imageUpload">Upload Image</label>
+                <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Upload image by click or drag and drop">
+                    <input id="imageUpload" name="image" type="file" accept="image/png,image/jpeg,image/webp" class="sr-only">
+                    <p class="drop-main">Drop image or click to upload</p>
+                    <p class="drop-sub">PNG, JPG, JPEG, WEBP up to {{ max_upload_mb }}MB</p>
+                </div>
+                <p id="imageSourceLabel" class="subtle-line">No image selected yet.</p>
+
+                <label class="field-label" for="templateSelect">Quick Template</label>
+                <select id="templateSelect" name="template_name" class="editor-input">
+                    {% for image in template_images %}
+                        <option value="{{ image.filename }}" data-url="{{ image.url }}">{{ image.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div id="panel-templates" class="tool-view" data-tool-panel="templates" hidden>
+                <p class="subtle-line">Choose a base template. Selection updates preview immediately.</p>
+                <div class="template-grid">
+                    {% for image in template_images %}
+                        <button
+                            type="button"
+                            class="template-tile"
+                            data-template-card="{{ image.filename }}"
+                            data-template-url="{{ image.url }}"
+                            aria-label="Select template {{ image.label }}"
+                        >
+                            <img src="{{ image.url }}" alt="{{ image.label }}">
+                            <span class="template-label">{{ image.label }}</span>
+                        </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div id="panel-text" class="tool-view" data-tool-panel="text" hidden>
+                <label class="field-label" for="topText">Top Text</label>
+                <input id="topText" name="top_text" type="text" maxlength="180" class="editor-input" placeholder="WHEN PROD IS CALM">
+
+                <label class="field-label" for="bottomText">Bottom Text</label>
+                <input id="bottomText" name="bottom_text" type="text" maxlength="180" class="editor-input" placeholder="AND YOU DON'T TRUST IT">
+
+                <label class="toggle-row" for="uppercase">
+                    <input id="uppercase" name="uppercase" type="checkbox">
+                    <span>Uppercase text</span>
+                </label>
+
+                <button id="randomTextBtn" type="button" class="btn btn-ghost w-full">Random Caption</button>
+            </div>
+
+            <div id="panel-style" class="tool-view" data-tool-panel="style" hidden>
+                <p class="subtle-line">Quick presets set tone first, then fine-tune in inspector.</p>
+                <div class="preset-grid">
+                    <button type="button" class="preset-btn" data-style-preset="classic">Classic</button>
+                    <button type="button" class="preset-btn" data-style-preset="clean">Clean</button>
+                    <button type="button" class="preset-btn" data-style-preset="loud">Loud</button>
+                </div>
+            </div>
+        </section>
+
+        <main id="canvasRegion" class="canvas-region">
+            <div class="canvas-header">
+                <p class="canvas-title">Live Preview</p>
+                <p class="canvas-sub">Editor output updates instantly.</p>
+            </div>
+            <div class="canvas-stage">
+                <canvas id="previewCanvas" width="1080" height="720" class="preview-canvas"></canvas>
+            </div>
+        </main>
+
+        <aside class="inspector" aria-label="Inspector">
+            <h2 class="inspector-title">Inspector</h2>
+            <ul class="progress-list">
+                <li id="progressImage" class="progress-item">Image selected</li>
+                <li id="progressText" class="progress-item">Text added</li>
+                <li id="progressStyle" class="progress-item">Style selected</li>
+                <li id="progressReady" class="progress-item">Ready to generate/export</li>
+            </ul>
+
+            <div class="inspector-group">
+                <label class="field-label" for="fontSize">
+                    Font Size <span id="fontSizeValue">56</span>
+                </label>
+                <input id="fontSize" name="font_size" type="range" min="20" max="120" value="56">
+            </div>
+
+            <div class="inspector-group">
+                <label class="field-label" for="strokeWidth">
+                    Stroke Width <span id="strokeWidthValue">4</span>
+                </label>
+                <input id="strokeWidth" name="stroke_width" type="range" min="0" max="20" value="4">
+            </div>
+
+            <div class="inspector-group two-col">
+                <label>
+                    <span class="field-label">Text Color</span>
+                    <input id="textColor" name="text_color" type="color" value="#ffffff">
+                </label>
+                <label>
+                    <span class="field-label">Stroke Color</span>
+                    <input id="strokeColor" name="stroke_color" type="color" value="#000000">
+                </label>
+            </div>
+
+            <div class="inspector-group">
+                <p class="field-label">Alignment</p>
+                <div class="align-group" role="group" aria-label="Text alignment">
+                    <button type="button" class="align-btn" data-align="left">Left</button>
+                    <button type="button" class="align-btn is-active" data-align="center">Center</button>
+                    <button type="button" class="align-btn" data-align="right">Right</button>
+                </div>
+                <select id="alignment" name="alignment" class="sr-only" aria-hidden="true" tabindex="-1">
+                    <option value="left">Left</option>
+                    <option value="center" selected>Center</option>
+                    <option value="right">Right</option>
+                </select>
+            </div>
+        </aside>
+    </div>
+
+    <div class="mobile-action-bar">
+        <button id="mobilePreviewBtn" type="button" class="btn btn-ghost">Preview</button>
+        <button id="mobileGenerateBtn" type="button" class="btn btn-secondary" disabled>Generate</button>
+        <a id="mobileExportBtn" href="#" class="btn btn-primary is-disabled" aria-disabled="true" download>Export</a>
+    </div>
+</div>
+{% endblock %}
