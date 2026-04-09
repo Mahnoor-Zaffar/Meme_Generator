@@ -1,21 +1,24 @@
 from __future__ import annotations
 
+import io
 import logging
+import os
 import re
 import uuid
 from pathlib import Path
 from typing import Final
 
-from flask import Flask, render_template, request, url_for
+from flask import Flask, render_template, request, send_file, url_for
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
-from utils.meme_generator import MemeOptions, ensure_default_templates, generate_meme
+from utils.meme_generator import MemeOptions, ensure_default_templates, generate_meme, generate_meme_bytes
 
 BASE_DIR: Final[Path] = Path(__file__).resolve().parent
 STATIC_DIR: Final[Path] = BASE_DIR / "static"
-UPLOAD_DIR: Final[Path] = STATIC_DIR / "uploads"
-GENERATED_DIR: Final[Path] = STATIC_DIR / "generated"
+IS_VERCEL: Final[bool] = os.getenv("VERCEL") == "1"
+UPLOAD_DIR: Final[Path] = (Path("/tmp") / "uploads") if IS_VERCEL else (STATIC_DIR / "uploads")
+GENERATED_DIR: Final[Path] = (Path("/tmp") / "generated") if IS_VERCEL else (STATIC_DIR / "generated")
 TEMPLATE_DIR: Final[Path] = STATIC_DIR / "templates"
 
 ALLOWED_EXTENSIONS: Final[set[str]] = {".png", ".jpg", ".jpeg", ".webp"}
@@ -57,12 +60,21 @@ def create_app() -> Flask:
                 uploaded_image_path = source_path
 
             options = _parse_meme_options()
+            direct_stream = IS_VERCEL or request.args.get("direct") == "1"
             output_filename = f"meme_{uuid.uuid4().hex}.png"
-            output_path = GENERATED_DIR / output_filename
+            if direct_stream:
+                image_bytes = generate_meme_bytes(source_path, options)
+                return send_file(
+                    io.BytesIO(image_bytes),
+                    mimetype="image/png",
+                    as_attachment=request.args.get("download") == "1",
+                    download_name=output_filename,
+                    max_age=0,
+                )
 
+            output_path = GENERATED_DIR / output_filename
             generate_meme(source_path, output_path, options)
             image_url = url_for("static", filename=f"generated/{output_filename}")
-
             return {
                 "success": True,
                 "message": "Meme generated successfully.",
@@ -104,6 +116,9 @@ def _list_template_images() -> list[dict[str, str]]:
 
 
 def _list_generated_memes(limit: int = 12) -> list[dict[str, str]]:
+    if IS_VERCEL:
+        return []
+
     files = sorted(
         (path for path in GENERATED_DIR.iterdir() if path.is_file() and path.suffix.lower() in ALLOWED_EXTENSIONS),
         key=lambda item: item.stat().st_mtime,

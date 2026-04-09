@@ -98,6 +98,7 @@
         objectUrl: null,
         generatedUrl: "",
         generatedFilename: "",
+        generatedBlobUrl: null,
     };
 
     function ensureToastStack() {
@@ -135,9 +136,17 @@
             URL.revokeObjectURL(state.objectUrl);
             state.objectUrl = null;
         }
+        if (state.generatedBlobUrl) {
+            URL.revokeObjectURL(state.generatedBlobUrl);
+            state.generatedBlobUrl = null;
+        }
     }
 
     function markGeneratedAsStale() {
+        if (state.generatedBlobUrl) {
+            URL.revokeObjectURL(state.generatedBlobUrl);
+            state.generatedBlobUrl = null;
+        }
         state.generatedUrl = "";
         state.generatedFilename = "";
         syncExportState();
@@ -563,14 +572,38 @@
                 method: "POST",
                 body: payload,
             });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok || !data.success) {
-                showBlockingError(data.message || "Generation failed.");
+            const contentType = response.headers.get("content-type") || "";
+            if (!response.ok) {
+                if (contentType.includes("application/json")) {
+                    const errorData = await response.json().catch(() => ({}));
+                    showBlockingError(errorData.message || "Generation failed.");
+                } else {
+                    showBlockingError("Generation failed.");
+                }
                 return;
             }
 
-            state.generatedUrl = data.image_url;
-            state.generatedFilename = data.filename || "meme.png";
+            if (contentType.includes("image/png")) {
+                const blob = await response.blob();
+                if (state.generatedBlobUrl) {
+                    URL.revokeObjectURL(state.generatedBlobUrl);
+                }
+                state.generatedBlobUrl = URL.createObjectURL(blob);
+                state.generatedUrl = state.generatedBlobUrl;
+
+                const disposition = response.headers.get("content-disposition") || "";
+                const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+                state.generatedFilename = filenameMatch?.[1] || "meme.png";
+            } else {
+                const data = await response.json().catch(() => ({}));
+                if (!data.success) {
+                    showBlockingError(data.message || "Generation failed.");
+                    return;
+                }
+                state.generatedUrl = data.image_url || "";
+                state.generatedFilename = data.filename || "meme.png";
+            }
+
             syncExportState();
             setProgressState();
             showSuccessToast("Meme generated. Export is ready.");

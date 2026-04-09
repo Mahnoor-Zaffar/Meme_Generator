@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -46,67 +47,87 @@ def ensure_default_templates(template_dir: Path) -> None:
 
 def generate_meme(source_path: Path, output_path: Path, options: MemeOptions) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with Image.open(source_path).convert("RGB") as image:
-        draw = ImageDraw.Draw(image)
-        image_width, image_height = image.size
-        margin = max(12, int(image_height * 0.03))
-        max_width = int(image_width * 0.92)
-        zone_height = int(image_height * 0.34)
-
-        top_text = _normalize_text(options.top_text, options.uppercase)
-        bottom_text = _normalize_text(options.bottom_text, options.uppercase)
-
-        if top_text:
-            lines, font, line_height = _fit_text_block(
-                draw=draw,
-                text=top_text,
-                base_size=options.font_size,
-                max_width=max_width,
-                max_height=zone_height,
-                stroke_width=options.stroke_width,
-            )
-            _draw_lines(
-                draw=draw,
-                lines=lines,
-                font=font,
-                start_y=margin,
-                image_width=image_width,
-                margin=margin,
-                line_height=line_height,
-                alignment=options.alignment,
-                fill=options.text_color,
-                stroke_fill=options.stroke_color,
-                stroke_width=options.stroke_width,
-            )
-
-        if bottom_text:
-            lines, font, line_height = _fit_text_block(
-                draw=draw,
-                text=bottom_text,
-                base_size=options.font_size,
-                max_width=max_width,
-                max_height=zone_height,
-                stroke_width=options.stroke_width,
-            )
-            total_height = len(lines) * line_height
-            start_y = max(margin, image_height - margin - total_height)
-            _draw_lines(
-                draw=draw,
-                lines=lines,
-                font=font,
-                start_y=start_y,
-                image_width=image_width,
-                margin=margin,
-                line_height=line_height,
-                alignment=options.alignment,
-                fill=options.text_color,
-                stroke_fill=options.stroke_color,
-                stroke_width=options.stroke_width,
-            )
-
+    image = _render_meme_image(source_path, options)
+    try:
         image.save(output_path, format="PNG", optimize=True)
+    finally:
+        image.close()
     return output_path
+
+
+def generate_meme_bytes(source_path: Path, options: MemeOptions) -> bytes:
+    image = _render_meme_image(source_path, options)
+    buffer = io.BytesIO()
+    try:
+        image.save(buffer, format="PNG", optimize=True)
+        return buffer.getvalue()
+    finally:
+        image.close()
+        buffer.close()
+
+
+def _render_meme_image(source_path: Path, options: MemeOptions) -> Image.Image:
+    with Image.open(source_path) as opened:
+        image = opened.convert("RGB")
+
+    draw = ImageDraw.Draw(image)
+    image_width, image_height = image.size
+    margin = max(12, int(image_height * 0.03))
+    max_width = int(image_width * 0.92)
+    zone_height = int(image_height * 0.34)
+
+    top_text = _normalize_text(options.top_text, options.uppercase)
+    bottom_text = _normalize_text(options.bottom_text, options.uppercase)
+
+    if top_text:
+        lines, font, line_height = _fit_text_block(
+            draw=draw,
+            text=top_text,
+            base_size=options.font_size,
+            max_width=max_width,
+            max_height=zone_height,
+            stroke_width=options.stroke_width,
+        )
+        _draw_lines(
+            draw=draw,
+            lines=lines,
+            font=font,
+            start_y=margin,
+            image_width=image_width,
+            margin=margin,
+            line_height=line_height,
+            alignment=options.alignment,
+            fill=options.text_color,
+            stroke_fill=options.stroke_color,
+            stroke_width=options.stroke_width,
+        )
+
+    if bottom_text:
+        lines, font, line_height = _fit_text_block(
+            draw=draw,
+            text=bottom_text,
+            base_size=options.font_size,
+            max_width=max_width,
+            max_height=zone_height,
+            stroke_width=options.stroke_width,
+        )
+        total_height = len(lines) * line_height
+        start_y = max(margin, image_height - margin - total_height)
+        _draw_lines(
+            draw=draw,
+            lines=lines,
+            font=font,
+            start_y=start_y,
+            image_width=image_width,
+            margin=margin,
+            line_height=line_height,
+            alignment=options.alignment,
+            fill=options.text_color,
+            stroke_fill=options.stroke_color,
+            stroke_width=options.stroke_width,
+        )
+
+    return image
 
 
 def _normalize_text(value: str, uppercase: bool) -> str:
